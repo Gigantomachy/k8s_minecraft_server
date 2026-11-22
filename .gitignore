@@ -1,0 +1,111 @@
+# =============================================================
+# Secrets & credentials — never commit these
+# =============================================================
+
+# Environment files (keep *.example templates)
+.env
+.env.*
+!.env.example
+
+# AWS credentials / config (in case one ever lands in the repo)
+.aws/
+credentials
+*.credentials
+
+# SSH / TLS keys and certificates
+*.pem
+*.key
+*.ppk
+*.p12
+*.pfx
+*.crt
+id_rsa*
+id_ed25519*
+id_ecdsa*
+
+# Kubernetes access (kubeconfig holds cluster admin credentials)
+kubeconfig
+kubeconfig*
+*.kubeconfig
+.kube/
+
+# Kubernetes Secret manifests kept locally (commit *.example versions instead)
+*secret*.yaml
+*secret*.yml
+!*secret*.example.yaml
+!*secret*.example.yml
+
+# =============================================================
+# Terraform
+# =============================================================
+
+# Provider plugins and module cache
+.terraform/
+
+# State can contain sensitive values (IPs, passwords, resource details)
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+crash.*.log
+
+# Variable files hold your real values; commit *.tfvars.example instead
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+
+# Local overrides
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# CLI config (can contain Terraform Cloud tokens)
+.terraformrc
+terraform.rc
+
+# NOTE: .terraform.lock.hcl is intentionally NOT ignored — commit it
+# so every run uses the same provider versions.
+
+# =============================================================
+# Go / Kubebuilder (operator/ also gets its own .gitignore)
+# =============================================================
+bin/
+*.exe
+*.test
+*.out
+cover.out
+vendor/
+go.work
+go.work.sum
+
+# =============================================================
+# Minecraft data (worlds live on EBS, not in git)
+# =============================================================
+world/
+world_nether/
+world_the_end/
+mc-data/
+data/
+logs/
+*.mca
+# RCON password lives in server.properties
+server.properties
+ops.json
+whitelist.json
+banned-*.json
+usercache.json
+
+# =============================================================
+# Editors & OS
+# =============================================================
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
