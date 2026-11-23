@@ -1,0 +1,9 @@
+# Store and check out text files with LF line endings, even on Windows.
+# Scripts in this repo run on Linux, where CRLF breaks bash
+# ("/bin/bash^M: bad interpreter").
+* text=auto eol=lf
+
+# Windows-only scripts keep CRLF
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf

@@ -1,0 +1,112 @@
+#!/bin/bash
+# Rendered by Terraform's templatefile(). Runs ONCE, as root, on first boot.
+# Log: /var/log/minecraft-bootstrap.log
+#
+# Template note: Terraform fills in dollar-brace placeholders.
+# Bash variables below are written as $VAR (no braces) so Terraform
+# leaves them alone.
+set -euo pipefail
+exec > >(tee -a /var/log/minecraft-bootstrap.log) 2>&1
+
+DATA_DEV="/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_${volume_serial}"
+MOUNT_POINT="/srv/minecraft"
+
+# ------------------------------------------------------------------
+# 1. Wait for the world volume. Terraform attaches it AFTER the
+#    instance starts, so it may not exist yet.
+# ------------------------------------------------------------------
+echo "Waiting for volume ${volume_id} at $DATA_DEV ..."
+for _ in $(seq 1 60); do
+  [ -e "$DATA_DEV" ] && break
+  sleep 5
+done
+if [ ! -e "$DATA_DEV" ]; then
+  echo "ERROR: volume never appeared after 5 minutes" >&2
+  exit 1
+fi
+
+# ------------------------------------------------------------------
+# 2. Format ONLY if the volume is blank. Never reformat an existing
+#    world. blkid exits non-zero when it finds no filesystem.
+# ------------------------------------------------------------------
+if ! blkid "$DATA_DEV" >/dev/null 2>&1; then
+  echo "No filesystem on volume: formatting (first use of this volume)"
+  mkfs.xfs -L mcdata "$DATA_DEV"
+else
+  echo "Existing filesystem found: keeping it"
+fi
+
+# ------------------------------------------------------------------
+# 3. Mount by UUID (device names can change, UUIDs don't).
+#    nofail = the instance still boots if the volume is missing.
+# ------------------------------------------------------------------
+UUID=$(blkid -s UUID -o value "$DATA_DEV")
+mkdir -p "$MOUNT_POINT"
+if ! grep -q "$UUID" /etc/fstab; then
+  echo "UUID=$UUID $MOUNT_POINT xfs defaults,nofail 0 2" >> /etc/fstab
+fi
+systemctl daemon-reload
+mountpoint -q "$MOUNT_POINT" || mount "$MOUNT_POINT"
+
+mkdir -p "$MOUNT_POINT/data"
+chown 1000:1000 "$MOUNT_POINT/data"   # the container runs as UID 1000
+
+# ------------------------------------------------------------------
+# 4. Docker
+# ------------------------------------------------------------------
+dnf install -y docker
+systemctl enable --now docker
+
+# ------------------------------------------------------------------
+# 5. Minecraft settings (readable by root only)
+# ------------------------------------------------------------------
+mkdir -p /etc/minecraft
+cat > /etc/minecraft/minecraft.env <<'EOF'
+EULA=TRUE
+TYPE=VANILLA
+VERSION=${minecraft_version}
+MEMORY=${memory}
+MOTD=${motd}
+ONLINE_MODE=TRUE
+ENABLE_WHITELIST=TRUE
+ENFORCE_WHITELIST=TRUE
+WHITELIST=${whitelist}
+OPS=${ops}
+TZ=America/Toronto
+EOF
+chmod 600 /etc/minecraft/minecraft.env
+
+# ------------------------------------------------------------------
+# 6. systemd service: starts on boot (only once the volume is
+#    mounted) and stops the container gracefully so the world saves.
+#    Only 25565 is published. The image's RCON port (25575) stays
+#    inside the container.
+# ------------------------------------------------------------------
+cat > /etc/systemd/system/minecraft.service <<'EOF'
+[Unit]
+Description=Minecraft server (itzg/minecraft-server)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+RequiresMountsFor=/srv/minecraft
+
+[Service]
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=120
+ExecStartPre=-/usr/bin/docker rm -f minecraft
+ExecStartPre=-/usr/bin/docker pull itzg/minecraft-server:${image_tag}
+ExecStart=/usr/bin/docker run --rm --name minecraft \
+  -p 25565:25565 \
+  --env-file /etc/minecraft/minecraft.env \
+  -v /srv/minecraft/data:/data \
+  itzg/minecraft-server:${image_tag}
+ExecStop=/usr/bin/docker stop -t 90 minecraft
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now minecraft.service
+echo "Bootstrap complete. Follow the server log with: docker logs -f minecraft"

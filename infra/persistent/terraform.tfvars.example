@@ -1,0 +1,12 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+
+aws_region        = "ca-central-1"
+availability_zone = "ca-central-1a"
+# aws_profile     = "default"
+
+data_volume_size_gb     = 20
+snapshot_retention_days = 7
+
+# Remove or leave null if you already have a budget set up.
+alert_email        = "you@example.com"
+monthly_budget_usd = 30
